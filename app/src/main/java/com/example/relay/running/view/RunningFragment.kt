@@ -2,11 +2,14 @@ package com.example.relay.running.view
 
 import android.Manifest
 import android.app.AlertDialog
+import android.content.Context
+import android.content.Context.LOCATION_SERVICE
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.icu.util.Calendar
+import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -15,6 +18,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
@@ -37,6 +41,7 @@ import com.example.relay.timetable.models.MemSchedule
 import com.example.relay.ui.viewmodels.RunningViewModel
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.*
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -51,7 +56,7 @@ import java.util.*
 
 
 @AndroidEntryPoint
-class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningInterface, MainInterface {
+class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningInterface, MainInterface, OnMapReadyCallback {
 
     private val viewModel: RunningViewModel by viewModels()
     private lateinit var binding: FragmentRunningBinding
@@ -70,6 +75,8 @@ class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningI
     private var curTimeInMillis = 0L
     private var curDistance = 0L
 
+    private var curLoc = LatLng(0.0, 0.0)
+
     private var listener: OnBottomSheetCallbacks? = null
 
     var runningRecordIdx: Long = 0
@@ -86,7 +93,7 @@ class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningI
         TedPermissionProvider.context.resources,
         R.drawable.img_marker
     )
-
+    var userProfileIdx = -1L;
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -113,6 +120,7 @@ class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningI
 //        mapView = MapView(requireContext())
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync {
+            onMapReady(it)
             moveCameraToUser()
             map = it
             addAllPolylines()
@@ -153,7 +161,7 @@ class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningI
             mAlertDialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))  //배경 투명처리 해줘야 배경 모양 드러남
 
             val button = mDialogView.findViewById<TextView>(R.id.img_close)
-                button.setOnClickListener {
+            button.setOnClickListener {
                 mAlertDialog.dismiss()
             }
             TrackingService.timeRunInMillis.observe(viewLifecycleOwner, Observer {
@@ -355,7 +363,15 @@ class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningI
 
     //위치 권한 허용
     private fun requestPermissions() {
+        //권한 허용 전 지도 로드 시 현재 위치 받아와 지도 생성(locationManager로 현재 위치 받아옴)
         if(TrackingUtility.hasLocationPermissions(requireContext())) {
+            val locationManager = activity?.getSystemService(LOCATION_SERVICE) as LocationManager?
+            val location = locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+
+            if (location != null) {
+                curLoc = LatLng(location.latitude, location.longitude)
+                Log.d("curLoc", curLoc.toString())
+            }
             return
         }
         if(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -647,5 +663,25 @@ class RunningFragment: Fragment(), EasyPermissions.PermissionCallbacks, RunningI
 
     override fun onGetRunEndFailure(message: String) {
         Log.d("RunMain", "onGetMainFailure")
+    }
+
+    //처음 지도 로드 시 현재 위치 기준으로 지도 생성
+    override fun onMapReady(p0: GoogleMap) {
+        this.map = p0
+
+        Log.d("readyready", "!!!!!")
+
+        if (curLoc != LatLng(0.0, 0.0)) {
+//            CameraPosition.Builder()
+//                .target(curLoc)
+//                .bearing(30f)
+//                .tilt(45f)
+//                .zoom(17f)
+//                .build()
+//            curLoc = LatLng(37.557667, 126.926546)
+            val cameraUpdate = CameraUpdateFactory.newLatLngZoom(curLoc, 10f)
+            Log.d("readyready", "${curLoc}")
+            map?.moveCamera(cameraUpdate)
+        }
     }
 }
